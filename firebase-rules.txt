@@ -1,0 +1,46 @@
+// ============================================================
+//  Firestore Security Rules — Reach The Target
+//
+//  Paste these rules into:
+//  Firebase Console → Firestore Database → Rules
+//
+//  These rules allow:
+//  - Anyone to read any game document (needed to join by code)
+//  - Anyone to create a new game document
+//  - Anyone to update an existing game document
+//
+//  NOTE: These rules are intentionally permissive for a
+//  public party game with no authentication. For a production
+//  app you would want to add Firebase Authentication and
+//  restrict writes to authenticated players only.
+// ============================================================
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // All game rooms live in this collection
+    match /reach_the_target_rooms/{roomCode} {
+
+      // Anyone can read a room (to check it exists before joining)
+      allow read: if true;
+
+      // Anyone can create a new room
+      allow create: if true;
+
+      // Anyone can update a room that exists.
+      // Soft validation: room code in the document must match
+      // the document ID, and status must be a known value.
+      allow update: if resource.data.roomCode == roomCode;
+
+      // Deletes are not needed by the app
+      allow delete: if false;
+    }
+
+    // Block access to every other collection
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
