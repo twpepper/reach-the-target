@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Reach The Target 🎯</title>
+  <title>Myles' Maths Game 🎯</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -21,8 +21,8 @@
     <div class="card">
       <div class="brand">
         <div class="brand-icon">🎯</div>
-        <h1 class="brand-title">Reach The Target</h1>
-        <p class="brand-subtitle">A two-player number strategy game</p>
+        <h1 class="brand-title">Myles' Maths Game</h1>
+        <p class="brand-subtitle">A two-player maths strategy game</p>
       </div>
 
       <div class="form-group">
@@ -61,7 +61,7 @@
         <button id="btn-join" class="btn btn-secondary">Join</button>
       </div>
 
-      <p class="hint-text">Add 1, 2, 3, or 4 each turn.<br>First to hit the target <em>exactly</em> wins!</p>
+      <p class="hint-text">Take turns adding numbers to a running total.<br>First to hit the target <em>exactly</em> wins!</p>
     </div>
   </div>
 
@@ -106,6 +106,33 @@
             max="100"
           >
         </div>
+
+        <div class="moves-range-row">
+          <div class="form-group half">
+            <label class="form-label" for="move-min-input">Min move</label>
+            <input
+              type="number"
+              id="move-min-input"
+              class="form-input"
+              value="1"
+              min="1"
+              max="9"
+            >
+          </div>
+          <div class="form-group half">
+            <label class="form-label" for="move-max-input">Max move</label>
+            <input
+              type="number"
+              id="move-max-input"
+              class="form-input"
+              value="4"
+              min="2"
+              max="9"
+            >
+          </div>
+        </div>
+        <p class="hint-text" style="margin-top:0; margin-bottom:16px;">Players can add any whole number between min and max each turn.</p>
+
         <button id="btn-start" class="btn btn-primary btn-full">🚀 Start Game</button>
       </div>
 
@@ -140,6 +167,11 @@
         <div class="topbar-item">
           <span class="topbar-label">Target</span>
           <span class="topbar-value" id="game-target">──</span>
+        </div>
+        <div class="topbar-divider"></div>
+        <div class="topbar-item">
+          <span class="topbar-label">Moves</span>
+          <span class="topbar-value" id="game-moves">──</span>
         </div>
       </div>
 
@@ -185,13 +217,8 @@
       <!-- Turn indicator -->
       <div class="turn-indicator" id="turn-indicator">Loading…</div>
 
-      <!-- Move buttons -->
-      <div class="move-grid" id="move-grid">
-        <button class="move-btn" data-value="1">+1</button>
-        <button class="move-btn" data-value="2">+2</button>
-        <button class="move-btn" data-value="3">+3</button>
-        <button class="move-btn" data-value="4">+4</button>
-      </div>
+      <!-- Move buttons — populated dynamically by app.js -->
+      <div class="move-grid" id="move-grid"></div>
 
       <!-- Move history -->
       <div class="history-panel">
@@ -209,7 +236,7 @@
        ===================================================== -->
   <div id="winner-overlay" class="overlay hidden">
     <div class="overlay-card">
-      <div class="winner-emoji" id="winner-emoji">🏆</div>
+      <img class="winner-img" id="winner-img" src="" alt="result">
       <h2 class="winner-title" id="winner-title">You win!</h2>
       <p class="winner-body" id="winner-body">You reached the target!</p>
 

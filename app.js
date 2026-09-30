@@ -84,6 +84,8 @@ const dom = {
   btnShareLink:      $("btn-share-link"),
   joinerNameDisplay: $("joiner-name-display"),
   targetInput:       $("target-input"),
+  moveMinInput:      $("move-min-input"),
+  moveMaxInput:      $("move-max-input"),
   btnStart:          $("btn-start"),
   creatorNameDisplay:$("creator-name-display"),
   lobbyRoomCodeMini: $("lobby-room-code-mini"),
@@ -91,6 +93,7 @@ const dom = {
   // Game
   gameRoomCode:      $("game-room-code"),
   gameTarget:        $("game-target"),
+  gameMoves:         $("game-moves"),
   pillCreator:       $("pill-creator"),
   pillJoiner:        $("pill-joiner"),
   pillCreatorName:   $("pill-creator-name"),
@@ -106,7 +109,7 @@ const dom = {
 
   // Overlay
   winnerOverlay:     $("winner-overlay"),
-  winnerEmoji:       $("winner-emoji"),
+  winnerImg:         $("winner-img"),
   winnerTitle:       $("winner-title"),
   winnerBody:        $("winner-body"),
   btnPlayAgain:      $("btn-play-again"),
@@ -237,6 +240,8 @@ async function handleCreate() {
       creatorName:  name,
       joinerName:   null,
       targetNumber: null,
+      moveMin:      null,
+      moveMax:      null,
       currentTotal: 0,
       currentTurn:  "creator",
       status:       "waiting",       // waiting | set_target | playing | finished
@@ -356,11 +361,12 @@ function handleGameUpdate(data) {
 //  RENDER GAME UI
 // ============================================================
 function renderGame(data) {
-  const { creatorName, joinerName, targetNumber, currentTotal, currentTurn, moves, status } = data;
+  const { creatorName, joinerName, targetNumber, moveMin, moveMax, currentTotal, currentTurn, moves, status } = data;
 
   // Header
   dom.gameRoomCode.textContent = state.roomCode;
   dom.gameTarget.textContent   = targetNumber ?? "--";
+  dom.gameMoves.textContent    = (moveMin && moveMax) ? `${moveMin}–${moveMax}` : "--";
 
   // Player pills
   dom.pillCreatorName.textContent = creatorName;
@@ -415,10 +421,31 @@ function renderTurnIndicator(data) {
 }
 
 function renderMoveButtons(data) {
-  const { status, currentTurn, currentTotal, targetNumber } = data;
+  const { status, currentTurn, currentTotal, targetNumber, moveMin, moveMax } = data;
   const isMyTurn   = currentTurn === state.playerRole;
   const isFinished = status === "finished";
 
+  const min = moveMin ?? 1;
+  const max = moveMax ?? 4;
+  const count = max - min + 1;
+
+  // Re-generate buttons only when the range changes (or on first render)
+  const existing = dom.moveGrid.querySelectorAll(".move-btn");
+  const expectedCount = count;
+  if (existing.length !== expectedCount ||
+      parseInt(existing[0]?.dataset.value, 10) !== min) {
+    dom.moveGrid.innerHTML = "";
+    dom.moveGrid.style.gridTemplateColumns = `repeat(${Math.min(count, 5)}, 1fr)`;
+    for (let v = min; v <= max; v++) {
+      const btn = document.createElement("button");
+      btn.className = "move-btn";
+      btn.dataset.value = v;
+      btn.textContent = `+${v}`;
+      dom.moveGrid.appendChild(btn);
+    }
+  }
+
+  // Update disabled/over-limit state on each button
   dom.moveGrid.querySelectorAll(".move-btn").forEach(btn => {
     const val         = parseInt(btn.dataset.value, 10);
     const wouldExceed = targetNumber && (currentTotal + val) > targetNumber;
@@ -491,17 +518,31 @@ async function makeMove(value) {
 //  START GAME (creator sets target)
 // ============================================================
 async function handleStartGame() {
-  const raw = parseInt(dom.targetInput.value, 10);
+  const raw    = parseInt(dom.targetInput.value, 10);
+  const minVal = parseInt(dom.moveMinInput.value, 10);
+  const maxVal = parseInt(dom.moveMaxInput.value, 10);
 
   if (!raw || raw < 5 || raw > 100) {
     showToast("Pick a target between 5 and 100!");
     dom.targetInput.focus();
     return;
   }
+  if (!minVal || minVal < 1 || minVal > 9) {
+    showToast("Min move must be between 1 and 9!");
+    dom.moveMinInput.focus();
+    return;
+  }
+  if (!maxVal || maxVal <= minVal || maxVal > 9) {
+    showToast(`Max move must be greater than ${minVal} and at most 9!`);
+    dom.moveMaxInput.focus();
+    return;
+  }
 
   try {
     await updateDoc(doc(db, GAMES_COLLECTION, state.roomCode), {
       targetNumber: raw,
+      moveMin:      minVal,
+      moveMax:      maxVal,
       status:       "playing"
     });
   } catch (err) {
@@ -516,9 +557,17 @@ async function handleStartGame() {
 async function handlePlayAgain() {
   // Both players can request rematch; whoever clicks first resets the game.
   // Creator sets the new target; joiner waits.
+  // Keep previous min/max as defaults in the inputs so the creator
+  // can keep the same settings or tweak them for the rematch.
+  const prev = state.gameData;
+  if (prev && prev.moveMin) dom.moveMinInput.value = prev.moveMin;
+  if (prev && prev.moveMax) dom.moveMaxInput.value = prev.moveMax;
+
   try {
     await updateDoc(doc(db, GAMES_COLLECTION, state.roomCode), {
       targetNumber: null,
+      moveMin:      null,
+      moveMax:      null,
       currentTotal: 0,
       currentTurn:  "creator",
       status:       "set_target",
@@ -562,7 +611,8 @@ function showWinnerOverlay(data) {
   const winnerName = winner === "creator" ? creatorName : joinerName;
   const iWon = winner === state.playerRole;
 
-  dom.winnerEmoji.textContent = iWon ? "🏆" : "😔";
+  dom.winnerImg.src = iWon ? "win.png" : "lose.png";
+  dom.winnerImg.alt = iWon ? "Winner!" : "You lost";
   dom.winnerTitle.textContent = iWon ? "You win!" : `${winnerName} wins!`;
   dom.winnerBody.textContent  = iWon
     ? "🎉 You reached the target exactly!"
@@ -578,45 +628,65 @@ function showWinnerOverlay(data) {
 // ============================================================
 async function copyRoomCode() {
   const code = state.roomCode || dom.roomCodeDisplay.textContent.trim();
-  try {
-    await navigator.clipboard.writeText(code);
-    showToast("Room code copied! ✅");
-  } catch {
-    fallbackCopy(code);
-  }
+  const ok = await writeToClipboard(code);
+  showToast(ok ? "Room code copied! ✅" : `Room code: ${code}`);
 }
 
 async function shareLink() {
   const url = buildShareURL();
+
+  // 1. Try native Web Share API (works well on mobile / some desktop browsers)
   if (navigator.share) {
     try {
       await navigator.share({
-        title: "Reach The Target",
-        text: `Join my game! Room: ${state.roomCode}`,
+        title: "Myles' Maths Game",
+        text:  `Join my game! Room: ${state.roomCode}`,
         url
       });
-      return;
+      return; // share sheet opened — done
     } catch (e) {
-      if (e.name === "AbortError") return;
+      if (e.name === "AbortError") return; // user cancelled — don't fall through
+      // Any other error (NotAllowedError, NotSupportedError, etc.) — fall through
     }
   }
-  try {
-    await navigator.clipboard.writeText(url);
-    showToast("Link copied to clipboard! 🔗");
-  } catch {
-    fallbackCopy(url);
+
+  // 2. Try clipboard
+  const ok = await writeToClipboard(url);
+  if (ok) {
+    showToast("Link copied to clipboard! 🔗", 3000);
+  } else {
+    // 3. Last resort: show the URL in the toast so the user can copy it manually
+    showToast(`Copy this link: ${url}`, 8000);
   }
 }
 
-function fallbackCopy(text) {
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.cssText = "position:fixed;opacity:0";
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand("copy");
-  document.body.removeChild(ta);
-  showToast("Copied! ✅");
+// Tries the modern Clipboard API first, then the legacy execCommand fallback.
+// Returns true if something was successfully copied, false otherwise.
+async function writeToClipboard(text) {
+  // Modern API — requires HTTPS or localhost
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      // Permission denied or unavailable — fall through to legacy
+    }
+  }
+
+  // Legacy execCommand fallback — works on HTTP and older browsers
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const success = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return success;
+  } catch {
+    return false;
+  }
 }
 
 function buildShareURL() {
